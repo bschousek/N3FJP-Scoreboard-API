@@ -34,6 +34,8 @@
   "site_visit_official": false,
   
   "weather_enabled": true,
+
+  "hidden_panels": ["score", "points-by-operator", "multipliers"],
   
   "band_goals": {
     "160": 5,

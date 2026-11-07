@@ -231,6 +231,27 @@ Edit `config.json` with your event details:
 | `emergency_power` | bool | 100% emergency power bonus (100 pts + 2x mult) |
 | `band_goals` | object | Target contacts per band (for star indicators) |
 | `weather_enabled` | bool | Show live weather in header |
+| `hidden_panels` | list | Panels or pages to hide, e.g. `["score", "mascot"]` (see below) |
+
+### Hiding Panels
+
+List panel names in `hidden_panels` to hide them. Hiding is display-only: the
+underlying stats keep being calculated, so removing a name brings the panel
+back. Remaining panels expand to fill the space, a container whose panels are
+all hidden disappears, and hidden pages are skipped in the rotation.
+
+| Page | Page name | Panels |
+|------|-----------|--------|
+| 1 - Scoreboard | `scoreboard` | `total-contacts`, `score` (QSO points / bonus / final score lines), `contacts-by-operator`, `mascot`, `points-by-operator`, `contacts-by-mode`, `top-countries` |
+| 2 - Bands | `bands` | `band-activity`, `timeline`, `performance` (the whole stats card), `multipliers`, `best-hour`, `average-rate`, `operating-time`, `live-rates`, `rate-20min`, `rate-60min` |
+| 3 - Stations | `stations` | `stations-header` |
+| 4 - Map | `map` | `map-counts` |
+
+Example for a special event (no contest scoring):
+```json
+"hidden_panels": ["score", "points-by-operator", "multipliers"]
+```
+A misspelled name is reported in the browser console along with the list of valid names.
 
 ---
 

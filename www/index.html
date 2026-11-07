@@ -540,6 +540,11 @@
       position: relative;
     }
 
+    /* Panels hidden via "hidden_panels" in config.json */
+    .panel-hidden {
+      display: none !important;
+    }
+
     .leaflet-tooltip.map-tooltip {
       background: var(--bg-card);
       color: var(--text-primary);
@@ -726,11 +731,12 @@
 
   <div class="pages">
     <!-- Page 1: Main Scoreboard -->
-    <div class="page page-1 active" data-page="1">
-      <div class="col">
-        <div class="card big-stat">
+    <div class="page page-1 active" data-page="1" data-panel="scoreboard" data-tracks="420px 420px 1fr" data-track-axis="columns">
+      <div class="col" data-tracks="auto 1fr">
+        <div class="card big-stat" data-panel="total-contacts">
           <div class="stat-label">Total Contacts</div>
           <div id="totalContacts" class="big-number">—</div>
+          <div data-panel="score">
           <div class="stat-label" style="margin-top: 10px;">
             QSO Points: <span id="totalPoints" style="color: var(--accent-green);">—</span> | 
             Bonus: <span id="bonusPoints" style="color: var(--accent-orange);">—</span>
@@ -738,8 +744,9 @@
           <div class="stat-label" style="font-size: 24px; margin-top: 8px; color: var(--accent-cyan);">
             Final Score: <span id="finalScore" style="font-weight: 900;">—</span>
           </div>
+          </div>
         </div>
-        <div class="card">
+        <div class="card" data-panel="contacts-by-operator">
           <div class="card-title">Contacts by Operator</div>
           <div class="chart-container">
             <canvas id="opChart"></canvas>
@@ -747,8 +754,8 @@
         </div>
       </div>
 
-      <div class="col">
-        <div class="card mascot-card">
+      <div class="col" data-tracks="auto 1fr">
+        <div class="card mascot-card" data-panel="mascot">
           <div class="mascot-text">
             <h1>Winter</h1>
             <h1>Field Day</h1>
@@ -757,7 +764,7 @@
           </div>
           <img src="/mascot.png" alt="Mascot" width="180" height="auto" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.3));">
         </div>
-        <div class="card">
+        <div class="card" data-panel="points-by-operator">
           <div class="card-title">Points by Operator</div>
           <div class="chart-container">
             <canvas id="ptsChart"></canvas>
@@ -765,14 +772,14 @@
         </div>
       </div>
 
-      <div class="col">
-        <div class="card">
+      <div class="col" data-tracks="auto 1fr">
+        <div class="card" data-panel="contacts-by-mode">
           <div class="card-title">Contacts by Mode</div>
           <div class="chart-container" style="height: 250px;">
             <canvas id="modeChart"></canvas>
           </div>
         </div>
-        <div class="card">
+        <div class="card" data-panel="top-countries">
           <div class="card-title">Top Countries</div>
           <div class="chart-container">
             <canvas id="countryChart"></canvas>
@@ -782,43 +789,43 @@
     </div>
 
     <!-- Page 2: Band Stats & Performance -->
-    <div class="page page-2" data-page="2">
-      <div class="card full-width" style="grid-column: 1 / -1;">
+    <div class="page page-2" data-page="2" data-panel="bands" data-tracks="auto 1fr 1fr">
+      <div class="card full-width" style="grid-column: 1 / -1;" data-panel="band-activity">
         <div class="card-title">📡 Band Activity & Performance</div>
         <div id="bandStats" class="stats-grid"></div>
       </div>
       
-      <div class="card" style="grid-column: 1 / -1;">
+      <div class="card" style="grid-column: 1 / -1;" data-panel="timeline">
         <div class="card-title">📈 QSO Timeline - Hourly Rate Throughout Event</div>
         <div class="chart-container" id="timelineContainer">
           <canvas id="timelineChart"></canvas>
         </div>
       </div>
 
-      <div class="card" style="grid-column: 1 / -1;">
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-          <div>
+      <div class="card" style="grid-column: 1 / -1;" data-panel="performance" data-panel-group>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;" data-tracks="1fr 1fr 1fr 1fr" data-track-axis="columns">
+          <div data-panel="multipliers">
             <div class="card-title">🎯 Multipliers</div>
             <div class="stat-box">
               <div class="stat-box-label">ARRL Sections</div>
               <div class="stat-box-value" id="sectionsCount">—</div>
             </div>
           </div>
-          <div>
+          <div data-panel="best-hour">
             <div class="card-title">🏆 Best Hour</div>
             <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
               <div><strong id="bestHour">—</strong></div>
               <div id="bestHourQSOs" style="color: var(--accent-cyan); font-size: 18px; font-weight: 700;">—</div>
             </div>
           </div>
-          <div>
+          <div data-panel="average-rate">
             <div class="card-title">📊 Average Rate</div>
             <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
               <div id="avgRate" style="color: var(--accent-green); font-size: 24px; font-weight: 700;">—</div>
               <div style="font-size: 11px;">QSOs per hour (overall)</div>
             </div>
           </div>
-          <div>
+          <div data-panel="operating-time">
             <div class="card-title">⏱️ Operating Time</div>
             <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
               <div id="totalHours" style="color: var(--accent-orange); font-size: 24px; font-weight: 700;">—</div>
@@ -828,15 +835,15 @@
         </div>
         
         <!-- Live Rate Row -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 20px; border-top: 1px solid var(--border-color);">
-          <div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 20px; border-top: 1px solid var(--border-color);" data-panel="live-rates" data-tracks="1fr 1fr" data-track-axis="columns">
+          <div data-panel="rate-20min">
             <div class="card-title">🔥 Current Rate (Last 20 min)</div>
             <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
               <div id="rate20min" style="color: var(--accent-cyan); font-size: 32px; font-weight: 700; transition: all 0.3s;">—</div>
               <div style="font-size: 11px;">QSOs per hour</div>
             </div>
           </div>
-          <div>
+          <div data-panel="rate-60min">
             <div class="card-title">⚡ Current Rate (Last 60 min)</div>
             <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
               <div id="rate60min" style="color: var(--accent-green); font-size: 32px; font-weight: 700; transition: all 0.3s;">—</div>
@@ -848,8 +855,8 @@
     </div>
 
     <!-- Page 3: Active Stations -->
-    <div class="page page-3" data-page="3">
-      <div class="card">
+    <div class="page page-3" data-page="3" data-panel="stations" data-tracks="auto 1fr">
+      <div class="card" data-panel="stations-header">
         <div class="card-title">📻 Operating Stations</div>
         <div style="color: var(--text-secondary); font-size: 12px; margin-top: -8px;">Physical locations with current operator and recent contacts</div>
       </div>
@@ -857,8 +864,8 @@
     </div>
 
     <!-- Page 4: World Map -->
-    <div class="page page-4" data-page="4">
-      <div class="card">
+    <div class="page page-4" data-page="4" data-panel="map" data-tracks="auto 1fr">
+      <div class="card" data-panel="map-counts">
         <div class="card-title">🌍 Worldwide Contacts Map</div>
         <div style="display: flex; gap: 30px; margin-top: 10px;">
           <div>
@@ -900,26 +907,40 @@ function toggleTheme() {
 let currentPage = 1;
 let autoRotate = true;
 
+// Page numbers not hidden by config (falls back to all pages if every one is hidden)
+function visiblePages() {
+  const all = [...document.querySelectorAll('.page')].map(p => parseInt(p.dataset.page));
+  const shown = all.filter(n => !document.querySelector(`.page[data-page="${n}"]`).classList.contains('panel-hidden'));
+  return shown.length ? shown : all;
+}
+
 function goToPage(pageNum) {
+  if (!visiblePages().includes(pageNum)) return;  // hidden page
   currentPage = pageNum;
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.page-dot').forEach(d => d.classList.remove('active'));
-  
+
   document.querySelector(`.page[data-page="${pageNum}"]`).classList.add('active');
   document.querySelectorAll('.page-dot')[pageNum - 1].classList.add('active');
-  
+
   if (pageNum === 4) initMap();
+}
+
+// Move forward (+1) or back (-1) through the visible pages, wrapping around
+function stepPage(dir) {
+  const pages = visiblePages();
+  const i = pages.indexOf(currentPage);
+  const next = i === -1 ? pages[0] : pages[(i + dir + pages.length) % pages.length];
+  goToPage(next);
 }
 
 function nextPage() {
   if (!autoRotate) return;
-  currentPage = currentPage >= 4 ? 1 : currentPage + 1;
-  goToPage(currentPage);
+  stepPage(1);
 }
 
 function prevPage() {
-  currentPage = currentPage <= 1 ? 4 : currentPage - 1;
-  goToPage(currentPage);
+  stepPage(-1);
 }
 
 function toggleAutoRotate() {
@@ -931,10 +952,7 @@ function toggleAutoRotate() {
 // Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') prevPage();
-  if (e.key === 'ArrowRight') {
-    currentPage = currentPage >= 4 ? 1 : currentPage + 1;
-    goToPage(currentPage);
-  }
+  if (e.key === 'ArrowRight') stepPage(1);
   if (e.key === ' ') {
     e.preventDefault();
     toggleAutoRotate();
@@ -1772,6 +1790,70 @@ function showMilestoneAnimation(value, text, emoji) {
   }, 3000);
 }
 
+// ===== Panel Visibility =====
+// Panes tagged data-panel="name" can be hidden by listing the name in
+// "hidden_panels" in config.json. Hiding is display-only: the data logic
+// keeps running, so un-hiding a panel brings it back fully working.
+// Layout containers carry data-tracks (their original grid track sizes, one
+// per child); the tracks of hidden children are dropped so the remaining
+// panes fill the space. Containers left with nothing visible hide too.
+function applyHiddenPanels(names) {
+  const hidden = new Set((names || []).map(n => String(n).trim().toLowerCase()));
+  const known = new Set();
+
+  document.querySelectorAll('[data-panel]').forEach(el => {
+    const name = el.dataset.panel;
+    known.add(name);
+    el.classList.toggle('panel-hidden', hidden.has(name));
+  });
+  hidden.forEach(n => {
+    if (!known.has(n)) console.warn(`hidden_panels: unknown panel "${n}". Known: ${[...known].join(', ')}`);
+  });
+
+  const isHidden = el => el.classList.contains('panel-hidden');
+
+  // Repeat until stable so emptiness propagates up nested containers
+  for (let pass = 0; pass < 5; pass++) {
+    let changed = false;
+
+    // Groups (e.g. the performance card) hide when all their sub-panels are hidden
+    document.querySelectorAll('[data-panel-group]').forEach(group => {
+      const subs = [...group.querySelectorAll('[data-panel]')];
+      if (subs.length && subs.every(isHidden) && !isHidden(group)) {
+        group.classList.add('panel-hidden');
+        changed = true;
+      }
+    });
+
+    document.querySelectorAll('[data-tracks]').forEach(box => {
+      const tracks = box.dataset.tracks.split(/\s+/);
+      const kids = [...box.children];
+      if (kids.length !== tracks.length) return;  // markup out of sync; leave alone
+      const visible = kids.map((k, i) => [k, tracks[i]]).filter(([k]) => !isHidden(k));
+
+      if (!visible.length) {
+        if (!isHidden(box)) { box.classList.add('panel-hidden'); changed = true; }
+        return;
+      }
+      const sizes = visible.map(([, t]) => t);
+      if (!sizes.some(t => t.endsWith('fr'))) sizes[sizes.length - 1] = '1fr';  // something must stretch
+      const prop = box.dataset.trackAxis === 'columns' ? 'gridTemplateColumns' : 'gridTemplateRows';
+      box.style[prop] = sizes.join(' ');
+    });
+
+    if (!changed) break;
+  }
+
+  // Hide page dots for hidden pages and leave a hidden page if it's showing
+  document.querySelectorAll('.page').forEach(p => {
+    const dot = document.querySelectorAll('.page-dot')[parseInt(p.dataset.page) - 1];
+    if (dot) dot.style.display = isHidden(p) && visiblePages().length < 4 ? 'none' : '';
+  });
+  if (!visiblePages().includes(currentPage)) goToPage(visiblePages()[0]);
+
+  if (map) map.invalidateSize();  // map container may have changed size
+}
+
 // ===== Config & Clock =====
 let clubConfig = null;
 
@@ -1783,7 +1865,9 @@ async function loadConfig() {
       document.getElementById('headerCallsign').textContent = clubConfig.callsign;
       document.getElementById('headerEvent').textContent = clubConfig.event_name;
       document.getElementById('headerClubName').textContent = clubConfig.club_name;
-      
+
+      applyHiddenPanels(clubConfig.hidden_panels);
+
       // Move the map's home marker to the configured location
       if (map) {
         updateHomeMarker();

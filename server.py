@@ -660,7 +660,8 @@ async def api_config():
         "home_lon": cfg.get("home_lon", 0),
         "home_location": cfg.get("home_location", ""),
         "weather_enabled": cfg.get("weather_enabled", False),
-        "band_goals": cfg.get("band_goals", {})
+        "band_goals": cfg.get("band_goals", {}),
+        "hidden_panels": cfg.get("hidden_panels", [])
     })
 
 @app.get("/api/diag")
