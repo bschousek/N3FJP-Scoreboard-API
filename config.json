@@ -12,12 +12,12 @@
   "poll_total_timeout": 8.0,
   "poll_idle_timeout": 1.0,
 
-  "club_name": "Your Amateur Radio Club",
-  "callsign": "ME0W",
-  "event_name": "Winter Field Day 2026",
-  "home_lat": 41.3,
-  "home_lon": -88.4,
-  "home_location": "McHenry, IL",
+  "club_name": "Stillwater Amateur Radio Association",
+  "callsign": "W0JH",
+  "event_name": "Remembering the Edmund Fitzgerald 2026",
+  "home_lat": 47.19899018111637,
+  "home_lon": -91.37568827589722,
+  "home_location": "Split Rock State Park",
 
   "field_day_class": "2O",
   "emergency_power": true,
@@ -29,7 +29,7 @@
   "satellite_qso": false,
   "w1aw_bulletin": false,
   "educational_activity": false,
-  "social_media": true,
+  "social_media": false,
   "youth_participation": true,
   "site_visit_official": false,
   
