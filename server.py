@@ -227,6 +227,19 @@ def build_list_cmd(n: int, include_all: bool = True) -> str:
 # Aggregation state
 # ----------------------------
 
+# COUNTRYWORKED values (uppercased) whose STATE field is a US state or Canadian province
+US_CANADA_COUNTRIES = frozenset({
+    "USA", "UNITED STATES", "UNITED STATES OF AMERICA", "ALASKA", "HAWAII", "CANADA",
+})
+
+
+def _public(station: dict) -> dict:
+    """Station dict for the API, without internal bookkeeping keys (leading "_")."""
+    out = {k: v for k, v in station.items() if not k.startswith("_")}
+    out["recent"] = [{k: v for k, v in q.items() if not k.startswith("_")} for q in station.get("recent", [])]
+    return out
+
+
 @dataclass
 class Aggregates:
     seen_keys: Set[int] = field(default_factory=set)
@@ -290,13 +303,15 @@ class Aggregates:
         if cont:
             self.contacts_by_continent[cont] = self.contacts_by_continent.get(cont, 0) + 1
 
-        st = (r.get("STATE") or "").strip()
-        if st:
-            self.contacts_by_state[st] = self.contacts_by_state.get(st, 0) + 1
-
         ctry = (r.get("COUNTRYWORKED") or "").strip()
         if ctry:
             self.contacts_by_country[ctry] = self.contacts_by_country.get(ctry, 0) + 1
+
+        # N3FJP also fills STATE with DX subdivisions (e.g. "FL" for a Spanish
+        # province), so only count it for US/Canada contacts (or no country given)
+        st = (r.get("STATE") or "").strip().upper()
+        if st and (not ctry or ctry.upper() in US_CANADA_COUNTRIES):
+            self.contacts_by_state[st] = self.contacts_by_state.get(st, 0) + 1
         
         # Track ARRL sections for multipliers
         section = (r.get("ARRLSECTION") or r.get("SECTION") or "").strip()
@@ -329,6 +344,11 @@ class Aggregates:
         call = (r.get("CALL") or "").strip()
         full_time = f"{qso_date} {qso_time}".strip()
         
+        # Records arrive newest-first from N3FJP (and in batches), so order by
+        # QSO time, with the N3FJP record number as tiebreaker/fallback.
+        # Unreadable times sort as oldest.
+        sort_key = f"{qso_dt.isoformat() if qso_dt else '0000-00-00T00:00:00'}|{pk if pk is not None else 0:012d}"
+
         # Initialize station if new
         if station not in self.stations:
             self.stations[station] = {
@@ -337,25 +357,32 @@ class Aggregates:
                 "band": band,
                 "mode": mode,
                 "recent": [],
-                "lastUpdate": full_time
+                "lastUpdate": full_time,
+                "_latest": "",
             }
-        
-        # Update station with current operator/band/mode (whoever logged most recently is "current")
-        self.stations[station]["operator"] = op
-        self.stations[station]["band"] = band
-        self.stations[station]["mode"] = mode
-        self.stations[station]["lastUpdate"] = full_time
-        
-        # Add to recent QSOs (keep last 5)
+        st_info = self.stations[station]
+
+        # Current operator/band/mode = the station's most recent QSO by time
+        if sort_key >= st_info["_latest"]:
+            st_info["operator"] = op
+            st_info["band"] = band
+            st_info["mode"] = mode
+            st_info["lastUpdate"] = full_time
+            st_info["_latest"] = sort_key
+
+        # Recent QSOs: newest first, keep 5
         qso_entry = {
             "call": call,
             "operator": op,  # Track which operator made this contact
             "band": band,
             "mode": mode,
-            "time": full_time
+            "time": full_time,
+            "_key": sort_key,
         }
-        self.stations[station]["recent"].insert(0, qso_entry)
-        self.stations[station]["recent"] = self.stations[station]["recent"][:5]
+        recent = st_info["recent"]
+        recent.append(qso_entry)
+        recent.sort(key=lambda q: q["_key"], reverse=True)
+        del recent[5:]
 
     def _calculate_field_day_bonus(self, config: dict) -> dict:
         """Calculate Field Day bonus points based on config"""
@@ -484,7 +511,7 @@ class Aggregates:
                 "sections": len(self.sections_worked),
                 "sectionsList": sorted(list(self.sections_worked))
             },
-            "stations": list(self.stations.values()),
+            "stations": [_public(s) for s in self.stations.values()],
             "rateStats": self._calculate_rates(),
         }
         

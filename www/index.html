@@ -1750,27 +1750,34 @@ let bandFirstContacts = new Set();
 function checkMilestones(currentCount) {
   // Contact milestones: 100, 500, 1000, 1500, 2000, etc.
   const milestones = [100, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000];
-  
-  for (const milestone of milestones) {
-    if (currentCount >= milestone && !achievedMilestones.has(milestone)) {
-      achievedMilestones.add(milestone);
-      showMilestoneAnimation(milestone, 'QSO MILESTONE!', '🎉🎊🎉');
-      break; // Only show one at a time
-    }
+  if (!currentCount) return;  // server still loading the log
+
+  const crossed = milestones.filter(m => currentCount >= m && !achievedMilestones.has(m));
+  crossed.forEach(m => achievedMilestones.add(m));
+
+  // Milestones already passed when the page first gets data are marked
+  // silently, so a page load doesn't replay every past celebration.
+  // If several are crossed in one update, celebrate only the highest.
+  if (lastContactCount > 0 && crossed.length) {
+    showMilestoneAnimation(crossed[crossed.length - 1], 'QSO MILESTONE!', '🎉🎊🎉');
   }
-  
   lastContactCount = currentCount;
 }
 
+let bandsPrimed = false;
+
 function checkNewBand(bands) {
-  // Check for first contact on each band
+  // Celebrate the first contact on a band that wasn't worked before.
+  // Bands present in the first data the page sees are recorded silently.
+  if (!bands.length) return;
   bands.forEach(b => {
     const band = b.Band;
-    if (b.Contacts === 1 && !bandFirstContacts.has(band)) {
+    if (!bandFirstContacts.has(band)) {
       bandFirstContacts.add(band);
-      showMilestoneAnimation(band, 'NEW BAND!', '📡🎯📡');
+      if (bandsPrimed) showMilestoneAnimation(band, 'NEW BAND!', '📡🎯📡');
     }
   });
+  bandsPrimed = true;
 }
 
 function showMilestoneAnimation(value, text, emoji) {
