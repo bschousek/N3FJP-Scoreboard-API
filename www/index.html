@@ -67,7 +67,7 @@
       body {
         transform: scale(1);
       }
-      #timelineContainer {
+      .page-2 #timelineContainer {
         height: 400px !important;
       }
     }
@@ -78,7 +78,7 @@
         transform-origin: top left;
         transform: scale(calc(100vw / 1920));
       }
-      #timelineContainer {
+      .page-2 #timelineContainer {
         height: 245px !important;
       }
     }
@@ -259,6 +259,7 @@
     .page-1 {
       display: grid;
       grid-template-columns: 420px 420px 1fr;
+      grid-template-rows: minmax(0, 1fr);   /* columns get the page height, not their content height */
       gap: 20px;
       height: 100%;
     }
@@ -267,6 +268,7 @@
       display: grid;
       grid-template-rows: auto 1fr;
       gap: 20px;
+      min-height: 0;
     }
 
     .big-stat {
@@ -540,6 +542,37 @@
       position: relative;
     }
 
+    /* Cards sharing a column evenly: chart fills the space under the title */
+    .split-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .split-card .chart-container {
+      flex: 1;
+      min-height: 0;
+      height: auto;
+    }
+
+    /* UTC clock in the header */
+    .utc-clock {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 32px;
+      font-weight: 600;
+      line-height: 1;
+      color: var(--accent-green);
+      font-variant-numeric: tabular-nums;
+    }
+    .utc-clock .utc-label {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+    }
+
     /* Panels hidden via "hidden_panels" in config.json */
     .panel-hidden {
       display: none !important;
@@ -702,7 +735,13 @@
     <div style="text-align: center; flex-grow: 1;">
       <div id="headerClubName" style="font-size: 14px; color: var(--text-secondary); font-weight: 600; margin-bottom: 4px;">McHenry County Amateur Radio Club</div>
       <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
-        <div id="headerDateTime" style="font-size: 18px; color: var(--accent-cyan); font-family: 'IBM Plex Mono', monospace; font-weight: 600;"></div>
+        <div class="utc-clock" title="Coordinated Universal Time (log time)">
+          <span id="headerUtc">--:--:--</span><span class="utc-label">UTC</span>
+        </div>
+        <div style="text-align: left; line-height: 1.25;">
+          <div style="font-size: 10px; color: var(--text-secondary); letter-spacing: 1px; text-transform: uppercase;">Local</div>
+          <div id="headerDateTime" style="font-size: 15px; color: var(--accent-cyan); font-family: 'IBM Plex Mono', monospace; font-weight: 600;"></div>
+        </div>
         <div id="weatherDisplay" style="font-size: 16px; color: var(--accent-green); font-weight: 600; display: none;">
           <span id="weatherIcon" style="font-size: 24px;">🌤️</span>
           <span id="weatherTemp">--°F</span>
@@ -772,14 +811,20 @@
         </div>
       </div>
 
-      <div class="col" data-tracks="auto 1fr">
+      <div class="col" data-tracks="auto minmax(0,1fr) minmax(0,1fr)">
         <div class="card" data-panel="contacts-by-mode">
           <div class="card-title">Contacts by Mode</div>
           <div class="chart-container" style="height: 250px;">
             <canvas id="modeChart"></canvas>
           </div>
         </div>
-        <div class="card" data-panel="top-countries">
+        <div class="card split-card" data-panel="timeline">
+          <div class="card-title">📈 QSO Timeline - Hourly Rate</div>
+          <div class="chart-container" id="timelineContainer">
+            <canvas id="timelineChart"></canvas>
+          </div>
+        </div>
+        <div class="card split-card" data-panel="top-countries">
           <div class="card-title">Top Countries</div>
           <div class="chart-container">
             <canvas id="countryChart"></canvas>
@@ -789,17 +834,10 @@
     </div>
 
     <!-- Page 2: Band Stats & Performance -->
-    <div class="page page-2" data-page="2" data-panel="bands" data-tracks="auto 1fr 1fr">
+    <div class="page page-2" data-page="2" data-panel="bands" data-tracks="auto 1fr">
       <div class="card full-width" style="grid-column: 1 / -1;" data-panel="band-activity">
         <div class="card-title">📡 Band Activity & Performance</div>
         <div id="bandStats" class="stats-grid"></div>
-      </div>
-      
-      <div class="card" style="grid-column: 1 / -1;" data-panel="timeline">
-        <div class="card-title">📈 QSO Timeline - Hourly Rate Throughout Event</div>
-        <div class="chart-container" id="timelineContainer">
-          <canvas id="timelineChart"></canvas>
-        </div>
       </div>
 
       <div class="card" style="grid-column: 1 / -1;" data-panel="performance" data-panel-group>
@@ -1851,7 +1889,7 @@ function applyHiddenPanels(names) {
         return;
       }
       const sizes = visible.map(([, t]) => t);
-      if (!sizes.some(t => t.endsWith('fr'))) sizes[sizes.length - 1] = '1fr';  // something must stretch
+      if (!sizes.some(t => t.includes('fr'))) sizes[sizes.length - 1] = '1fr';  // something must stretch
       const prop = box.dataset.trackAxis === 'columns' ? 'gridTemplateColumns' : 'gridTemplateRows';
       box.style[prop] = sizes.join(' ');
     });
@@ -1867,6 +1905,10 @@ function applyHiddenPanels(names) {
   if (!visiblePages().includes(currentPage)) goToPage(visiblePages()[0]);
 
   if (map) map.invalidateSize();  // map container may have changed size
+
+  // Charts run with responsive:false, so re-fit them to their (possibly
+  // resized) containers once the layout has settled
+  requestAnimationFrame(() => Object.values(Chart.instances).forEach(c => c.resize()));
 }
 
 // ===== Config & Clock =====
@@ -1952,6 +1994,8 @@ function updateClock() {
     hour12: false
   };
   document.getElementById('headerDateTime').textContent = now.toLocaleString('en-US', options);
+  // UTC (log time): HH:MM:SS
+  document.getElementById('headerUtc').textContent = now.toISOString().slice(11, 19);
 }
 
 async function refresh() {

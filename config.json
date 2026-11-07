@@ -35,7 +35,7 @@
   
   "weather_enabled": true,
 
-  "hidden_panels": ["score", "points-by-operator", "multipliers", "mascot"],
+  "hidden_panels": ["score", "points-by-operator", "multipliers", "mascot", "contacts-by-mode"],
   
   "band_goals": {
     "160": 5,

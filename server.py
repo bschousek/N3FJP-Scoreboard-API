@@ -695,6 +695,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
+@app.middleware("http")
+async def no_cache_headers(request, call_next):
+    # Make browsers revalidate on every load (cheap: unchanged files return
+    # 304 via ETag), so an updated dashboard shows up on a normal reload.
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # API routes FIRST
 @app.get("/api/snapshot")
 async def api_snapshot():
