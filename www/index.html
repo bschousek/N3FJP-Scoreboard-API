@@ -27,6 +27,10 @@
       --accent-green: #00ff88;
       --border-color: rgba(0, 212, 255, 0.15);
       --glow: rgba(0, 212, 255, 0.3);
+      /* Outline map */
+      --map-ocean: #0b1220;
+      --map-land: #1c2638;
+      --map-border: rgba(0, 212, 255, 0.28);
     }
 
     [data-theme="light"] {
@@ -40,6 +44,9 @@
       --accent-green: #00aa66;
       --border-color: rgba(0, 136, 204, 0.2);
       --glow: rgba(0, 136, 204, 0.1);
+      --map-ocean: #dfe9f3;
+      --map-land: #f7f9fc;
+      --map-border: rgba(26, 35, 50, 0.35);
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -528,9 +535,17 @@
     #mapContainer {
       border-radius: 12px;
       overflow: hidden;
-      background: var(--bg-secondary);
+      background: var(--map-ocean);
       border: 1px solid var(--border-color);
       position: relative;
+    }
+
+    .leaflet-tooltip.map-tooltip {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      font-size: 13px;
     }
 
     #mapCanvas {
@@ -856,7 +871,7 @@
           </div>
         </div>
       </div>
-      <div id="mapContainer" style="width: 100%; height: 820px; border-radius: 12px; overflow: hidden; margin-top: 20px;"></div>
+      <div id="mapContainer" style="width: 100%; height: 100%; min-height: 0;"></div>
     </div>
   </div>
 
@@ -1234,181 +1249,288 @@ function updateAllCharts() {
   timelineChart.update('none');
 }
 
-// ===== Leaflet World Map =====
+// ===== Leaflet Outline Map =====
+// Offline vector map: country and US/Canada state outlines from Natural Earth
+// (www/lib/geo/, built by build_map_data.py). Worked states and countries are
+// shaded, darker for more contacts. No tile server or API key needed.
 let map = null;
-let mapMarkers = [];
 let homeMarker = null;
-let contactLines = [];
+let countriesLayer = null;
+let statesLayer = null;
+let mapDataReady = false;
+let pendingMapSnapshot = null;
+let lastWorkedKey = '';
 
-// Approximate country/state coordinates (lat, lon)
-const locationCoords = {
-  // Major countries
-  'USA': [39, -98],
-  'CANADA': [56, -106],
-  'MEXICO': [23, -102],
-  'UK': [54, -2],
-  'UNITED KINGDOM': [54, -2],
-  'GERMANY': [51, 10],
-  'FRANCE': [46, 2],
-  'ITALY': [42, 12],
-  'SPAIN': [40, -4],
-  'RUSSIA': [60, 100],
-  'CHINA': [35, 105],
-  'JAPAN': [36, 138],
-  'AUSTRALIA': [-25, 133],
-  'BRAZIL': [-10, -55],
-  'ARGENTINA': [-34, -64],
-  'SOUTH AFRICA': [-29, 24],
-  'INDIA': [20, 77],
-  'POLAND': [52, 20],
-  'NETHERLANDS': [52, 5],
-  'BELGIUM': [51, 4],
-  'SWEDEN': [62, 15],
-  'NORWAY': [62, 10],
-  'FINLAND': [64, 26],
-  'DENMARK': [56, 10],
-  'CZECH REPUBLIC': [50, 15],
-  'AUSTRIA': [47, 13],
-  'SWITZERLAND': [47, 8],
-  'PORTUGAL': [39, -8],
-  'GREECE': [39, 22],
-  'TURKEY': [39, 35],
-  'UKRAINE': [49, 32],
-  'ROMANIA': [46, 25],
-  'NEW ZEALAND': [-41, 174],
-  'SOUTH KOREA': [37, 127],
-  'THAILAND': [15, 100],
-  'INDONESIA': [-2, 118],
-  'PHILIPPINES': [13, 122],
-  'MALAYSIA': [4, 102],
-  'SINGAPORE': [1, 104],
-  'CHILE': [-30, -71],
-  'PERU': [-10, -76],
-  'COLOMBIA': [4, -72],
-  'VENEZUELA': [8, -66],
-  
-  // US States (approximate centers)
-  'IL': [40, -89], 'CA': [37, -120], 'TX': [31, -99], 'FL': [28, -82],
-  'NY': [43, -75], 'PA': [41, -77], 'OH': [40, -82], 'MI': [44, -85],
-  'WI': [44, -90], 'MN': [46, -94], 'IA': [42, -93], 'MO': [38, -92],
-  'IN': [40, -86], 'KY': [38, -85], 'TN': [36, -86], 'AL': [33, -87],
-  'MS': [33, -90], 'AR': [35, -92], 'LA': [31, -92], 'OK': [36, -97],
-  'KS': [38, -98], 'NE': [41, -100], 'SD': [44, -100], 'ND': [47, -100],
-  'MT': [47, -110], 'WY': [43, -108], 'CO': [39, -105], 'NM': [34, -106],
-  'AZ': [34, -111], 'UT': [39, -111], 'NV': [39, -117], 'ID': [44, -114],
-  'WA': [47, -121], 'OR': [44, -121], 'AK': [64, -150], 'HI': [21, -158],
-  'ME': [45, -69], 'NH': [44, -71], 'VT': [44, -73], 'MA': [42, -72],
-  'RI': [42, -71], 'CT': [41, -73], 'NJ': [40, -75], 'DE': [39, -75],
-  'MD': [39, -77], 'VA': [38, -79], 'WV': [39, -81], 'NC': [35, -80],
-  'SC': [34, -81], 'GA': [33, -84]
+// Contact counts by map feature, rebuilt on every snapshot
+let workedCountries = {};   // ISO A3 -> contacts
+let workedStates = {};      // postal code -> contacts
+let maxCountryCount = 1;
+let maxStateCount = 1;
+
+// Lookup tables built from the GeoJSON once it loads
+let countryIndex = {};      // normalized name -> ISO A3
+let stateIndex = {};        // normalized code or name -> postal code
+let unmatchedLocations = new Set();
+
+// N3FJP / DXCC entity names that don't match a Natural Earth country name.
+// Keys are normalized (see normalizePlaceName); values are ISO A3 codes.
+// Add entries here if the browser console reports an unmatched country.
+const COUNTRY_ALIASES = {
+  'usa': 'USA', 'us': 'USA', 'united states': 'USA', 'alaska': 'USA', 'hawaii': 'USA',
+  'england': 'GBR', 'scotland': 'GBR', 'wales': 'GBR', 'northern ireland': 'GBR',
+  'great britain': 'GBR', 'uk': 'GBR', 'shetland islands': 'GBR',
+  'european russia': 'RUS', 'asiatic russia': 'RUS', 'kaliningrad': 'RUS',
+  'fed republic of germany': 'DEU', 'federal republic of germany': 'DEU',
+  'czech republic': 'CZE', 'slovak republic': 'SVK',
+  'republic of korea': 'KOR', 'korea': 'KOR', 'dprk': 'PRK',
+  'bosnia herzegovina': 'BIH', 'serbia': 'SRB', 'macedonia': 'MKD',
+  'swaziland': 'SWZ', 'cote divoire': 'CIV', 'timor leste': 'TLS',
+  'democratic republic of the congo': 'COD', 'dem republic of the congo': 'COD',
+  'republic of the congo': 'COG', 'congo': 'COG',
+  'republic of south sudan': 'SDS', 'viet nam': 'VNM', 'holland': 'NLD',
+  'peoples republic of china': 'CHN', 'vatican city': 'VAT',
+  'hong kong': 'HKG', 'macao': 'MAC', 'macau': 'MAC',
+  'sardinia': 'ITA', 'sicily': 'ITA',
+  'balearic islands': 'ESP', 'canary islands': 'ESP', 'ceuta and melilla': 'ESP',
+  'corsica': 'FRA', 'azores': 'PRT', 'madeira islands': 'PRT', 'madeira': 'PRT',
+  'crete': 'GRC', 'dodecanese': 'GRC', 'mount athos': 'GRC',
+  'svalbard': 'NOR', 'jan mayen': 'NOR', 'aland islands': 'ALD',
+  'west malaysia': 'MYS', 'east malaysia': 'MYS',
+  'galapagos islands': 'ECU', 'easter island': 'CHL', 'juan fernandez islands': 'CHL',
+  'fernando de noronha': 'BRA', 'lord howe island': 'AUS', 'chatham islands': 'NZL',
+  'ogasawara': 'JPN', 'guantanamo bay': 'CUB',
+  'us virgin islands': 'VIR', 'virgin islands': 'VIR',
+  'saint helena': 'SHN', 'ascension island': 'SHN', 'tristan da cunha': 'SHN',
+  'sint maarten': 'SXM', 'saint maarten': 'SXM',
 };
 
-function initMap() {
-  if (map) return;  // Already initialized
-  
-  const theme = document.body.getAttribute('data-theme') || 'dark';
-  
-  // Create map centered on home location (McHenry, IL)
-  map = L.map('mapContainer', {
-    center: [41.3, -88.4],
-    zoom: 3,
-    zoomControl: false,
-    attributionControl: false
-  });
-  
-  // Use CartoDB dark/light tiles (work offline if cached)
-  const tileUrl = theme === 'dark' 
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  
-  L.tileLayer(tileUrl, {
-    maxZoom: 19,
-    subdomains: 'abcd'
-  }).addTo(map);
-  
-  // Add home station marker (McHenry, IL)
-  homeMarker = L.circleMarker([41.3, -88.4], {
-    radius: 10,
-    fillColor: '#ff6b35',
-    color: '#fff',
-    weight: 3,
-    opacity: 1,
-    fillOpacity: 0.9
-  }).addTo(map);
-  
-  homeMarker.bindPopup('<b>N9WH Home Station</b><br>McHenry, IL');
+// Alternate province/state abbreviations seen in logs
+const STATE_ALIASES = { 'pq': 'QC', 'nf': 'NL', 'lb': 'NL', 'yk': 'YT', 'pei': 'PE', 'nwt': 'NT' };
+
+function normalizePlaceName(s) {
+  return (s || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/['’.]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\bst\b/g, 'saint')
+    .replace(/\brep\b/g, 'republic')
+    .replace(/\bis$/, 'islands')
+    .replace(/^the /, '')
+    .trim();
 }
 
-function addMapMarker(location, isCountry) {
-  if (!map) initMap();
-  
-  const coords = locationCoords[location.toUpperCase()];
-  if (!coords) return;  // Skip unknown locations
-  
-  const [lat, lon] = coords;
-  
-  // Create marker
-  const marker = L.circleMarker([lat, lon], {
-    radius: 6,
-    fillColor: isCountry ? '#00d4ff' : '#00ff88',
-    color: '#fff',
-    weight: 2,
-    opacity: 1,
-    fillOpacity: 0.8
-  }).addTo(map);
-  
-  marker.bindPopup(`<b>${location}</b>`);
-  
-  // Draw line from home to contact
-  const line = L.polyline([[41.3, -88.4], [lat, lon]], {
-    color: isCountry ? '#00d4ff' : '#00ff88',
-    weight: 2,
-    opacity: 0.5
-  }).addTo(map);
-  
-  mapMarkers.push(marker);
-  contactLines.push(line);
+function mapColors() {
+  const css = getComputedStyle(document.body);
+  const v = name => css.getPropertyValue(name).trim();
+  return {
+    land: v('--map-land'),
+    border: v('--map-border'),
+    state: v('--accent-green'),
+    country: v('--accent-cyan'),
+    home: v('--accent-orange'),
+  };
 }
 
-function updateMapBounds() {
-  if (!map || mapMarkers.length === 0) return;
-  
-  // Collect all marker positions plus home
-  const allPoints = mapMarkers.map(m => m.getLatLng());
-  allPoints.push(homeMarker.getLatLng());
-  
-  // Only auto-zoom if we have contacts
-  if (mapMarkers.length > 0) {
-    map.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50] });
+// Shade intensity: log scale so a handful of contacts is visible
+// but the busiest areas still stand out
+function shadeOpacity(count, max) {
+  const t = Math.log(1 + count) / Math.log(1 + Math.max(max, 1));
+  return 0.35 + 0.55 * t;
+}
+
+function countryStyle(feature) {
+  const c = mapColors();
+  const iso = feature.properties.iso;
+  // US and Canada are shaded per state/province by the layer on top
+  const count = (iso === 'USA' || iso === 'CAN') ? 0 : (workedCountries[iso] || 0);
+  return {
+    color: c.border,
+    weight: 0.8,
+    fillColor: count ? c.country : c.land,
+    fillOpacity: count ? shadeOpacity(count, maxCountryCount) : 1,
+  };
+}
+
+function stateStyle(feature) {
+  const c = mapColors();
+  const count = workedStates[feature.properties.code] || 0;
+  return {
+    color: c.border,
+    weight: 0.8,
+    fillColor: count ? c.state : c.land,
+    fillOpacity: count ? shadeOpacity(count, maxStateCount) : 1,
+  };
+}
+
+function featureTooltip(name, count) {
+  return `<b>${name}</b><br>${count ? `${count} contact${count === 1 ? '' : 's'}` : 'Not worked'}`;
+}
+
+function homeLatLng() {
+  if (clubConfig && clubConfig.home_lat && clubConfig.home_lon) {
+    return [clubConfig.home_lat, clubConfig.home_lon];
+  }
+  return [39, -98];  // middle of the US until config loads
+}
+
+function updateHomeMarker() {
+  if (!homeMarker) return;
+  homeMarker.setLatLng(homeLatLng());
+  homeMarker.setStyle({ fillColor: mapColors().home });
+  if (clubConfig) {
+    homeMarker.bindPopup(`<b>${clubConfig.callsign} Home Station</b><br>${clubConfig.home_location || ''}`);
   }
 }
 
-function clearMapMarkers() {
-  mapMarkers.forEach(m => map.removeLayer(m));
-  contactLines.forEach(l => map.removeLayer(l));
-  mapMarkers = [];
-  contactLines = [];
+function initMap() {
+  if (map) return;  // Already initialized
+
+  map = L.map('mapContainer', {
+    center: homeLatLng(),
+    zoom: 4,
+    minZoom: 2,
+    maxZoom: 8,
+    zoomSnap: 0.25,   // fractional zoom so fitBounds fills the screen
+    zoomDelta: 0.5,
+    zoomControl: false,
+    attributionControl: false,
+    worldCopyJump: false,
+  });
+
+  homeMarker = L.circleMarker(homeLatLng(), {
+    radius: 9,
+    fillColor: mapColors().home,
+    color: '#fff',
+    weight: 3,
+    opacity: 1,
+    fillOpacity: 0.95,
+  });
+  updateHomeMarker();
+
+  Promise.all([
+    fetch('/lib/geo/countries.geojson').then(r => r.json()),
+    fetch('/lib/geo/states.geojson').then(r => r.json()),
+  ]).then(([countries, states]) => {
+    countries.features.forEach(f => {
+      (f.properties.names || []).forEach(n => {
+        const key = normalizePlaceName(n);
+        if (key && !(key in countryIndex)) countryIndex[key] = f.properties.iso;
+      });
+    });
+    states.features.forEach(f => {
+      stateIndex[f.properties.code.toLowerCase()] = f.properties.code;
+      stateIndex[normalizePlaceName(f.properties.name)] = f.properties.code;
+    });
+
+    countriesLayer = L.geoJSON(countries, {
+      style: countryStyle,
+      onEachFeature: (f, layer) => layer.bindTooltip(
+        () => featureTooltip(f.properties.name, workedCountries[f.properties.iso] || 0),
+        { sticky: true, className: 'map-tooltip' }),
+    }).addTo(map);
+
+    statesLayer = L.geoJSON(states, {
+      style: stateStyle,
+      onEachFeature: (f, layer) => layer.bindTooltip(
+        () => featureTooltip(f.properties.name, workedStates[f.properties.code] || 0),
+        { sticky: true, className: 'map-tooltip' }),
+    }).addTo(map);
+
+    homeMarker.addTo(map);  // keep home on top of the outlines
+    mapDataReady = true;
+
+    if (pendingMapSnapshot) {
+      updateMapData(pendingMapSnapshot);
+      pendingMapSnapshot = null;
+    }
+  }).catch(e => console.error('Map outline data failed to load:', e));
+}
+
+function lookupCountry(name) {
+  const key = normalizePlaceName(name);
+  return COUNTRY_ALIASES[key] || countryIndex[key] || null;
+}
+
+function lookupState(code) {
+  const key = normalizePlaceName(code);
+  return STATE_ALIASES[key] || stateIndex[key] || null;
+}
+
+function warnUnmatched(kind, name) {
+  const id = `${kind}:${name}`;
+  if (unmatchedLocations.has(id)) return;
+  unmatchedLocations.add(id);
+  console.warn(`Map: no outline for ${kind} "${name}" (add it to ${kind === 'country' ? 'COUNTRY_ALIASES' : 'STATE_ALIASES'})`);
+}
+
+// Rebuild shading from a snapshot's contactsByCountry / contactsByState
+function updateMapData(s) {
+  if (!map) initMap();
+  if (!mapDataReady) {
+    pendingMapSnapshot = s;
+    return;
+  }
+
+  workedCountries = {};
+  (s.contactsByCountry || []).forEach(c => {
+    const iso = lookupCountry(c.Country);
+    if (!iso) return warnUnmatched('country', c.Country);
+    workedCountries[iso] = (workedCountries[iso] || 0) + c.Contacts;
+  });
+
+  workedStates = {};
+  (s.contactsByState || []).forEach(st => {
+    const code = lookupState(st.State);
+    if (!code) return warnUnmatched('state', st.State);
+    workedStates[code] = (workedStates[code] || 0) + st.Contacts;
+  });
+
+  const countryCounts = Object.entries(workedCountries)
+    .filter(([iso]) => iso !== 'USA' && iso !== 'CAN').map(([, n]) => n);
+  maxCountryCount = Math.max(1, ...countryCounts);
+  maxStateCount = Math.max(1, ...Object.values(workedStates));
+
+  countriesLayer.setStyle(countryStyle);
+  statesLayer.setStyle(stateStyle);
+
+  // Re-frame the map only when the set of worked areas changes,
+  // so it doesn't jump around on every refresh
+  const workedKey = Object.keys(workedCountries).sort().join(',') + '|' +
+                    Object.keys(workedStates).sort().join(',');
+  if (workedKey !== lastWorkedKey) {
+    lastWorkedKey = workedKey;
+    fitMapToWorked();
+  }
+}
+
+function fitMapToWorked() {
+  if (!map || !mapDataReady) return;
+  const bounds = L.latLngBounds([homeLatLng()]);
+
+  statesLayer.eachLayer(layer => {
+    if (workedStates[layer.feature.properties.code]) bounds.extend(layer.getBounds());
+  });
+  countriesLayer.eachLayer(layer => {
+    const iso = layer.feature.properties.iso;
+    // Skip US/Canada (their states cover them) so Alaska's Aleutians
+    // don't stretch the view across the whole globe
+    if (iso !== 'USA' && iso !== 'CAN' && workedCountries[iso]) bounds.extend(layer.getBounds());
+  });
+
+  if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
+    map.setView(homeLatLng(), 4);
+  } else {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 6 });
+  }
 }
 
 function updateMapTheme() {
-  if (!map) return;
-  
-  const theme = document.body.getAttribute('data-theme') || 'dark';
-  const tileUrl = theme === 'dark' 
-    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-  
-  // Remove old tiles and add new ones
-  map.eachLayer(layer => {
-    if (layer instanceof L.TileLayer) {
-      map.removeLayer(layer);
-    }
-  });
-  
-  L.tileLayer(tileUrl, {
-    maxZoom: 19,
-    subdomains: 'abcd'
-  }).addTo(map);
+  if (!map || !mapDataReady) return;
+  countriesLayer.setStyle(countryStyle);
+  statesLayer.setStyle(stateStyle);
+  updateHomeMarker();
 }
 
 // ===== Data Processing =====
@@ -1590,23 +1712,8 @@ function applySnapshot(s) {
   document.getElementById('countryCount').textContent = s.contactsByCountry.length;
   document.getElementById('stateCount').textContent = s.contactsByState.length;
   
-  // Update Leaflet map with all contacts
-  if (!map) initMap();
-  
-  clearMapMarkers();  // Clear old markers
-  
-  // Add markers for countries
-  s.contactsByCountry.forEach(c => {
-    addMapMarker(c.Country, true);  // true = is country
-  });
-  
-  // Add markers for states  
-  s.contactsByState.forEach(st => {
-    addMapMarker(st.State, false);  // false = is state
-  });
-  
-  // Update map bounds after all markers added
-  updateMapBounds();
+  // Shade worked states/countries on the outline map
+  updateMapData(s);
 }
 
 // ===== Milestone Celebrations =====
@@ -1677,10 +1784,10 @@ async function loadConfig() {
       document.getElementById('headerEvent').textContent = clubConfig.event_name;
       document.getElementById('headerClubName').textContent = clubConfig.club_name;
       
-      // Update home marker if map exists
-      if (map && homeMarker) {
-        homeMarker.setLatLng([clubConfig.home_lat, clubConfig.home_lon]);
-        homeMarker.bindPopup(`<b>${clubConfig.callsign} Home Station</b><br>${clubConfig.home_location}`);
+      // Move the map's home marker to the configured location
+      if (map) {
+        updateHomeMarker();
+        fitMapToWorked();
       }
       
       // Fetch weather if enabled

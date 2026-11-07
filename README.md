@@ -38,10 +38,10 @@ Transform your Field Day operation with this techy, real-time scoreboard that co
 - **Field Day Scoring** - Automatic bonus point calculation
 
 ### 🗺️ Interactive World Map
-- **Leaflet.js Integration** - Professional mapping with offline support
-- **Contact Visualization** - See every state and country worked
-- **Distance Lines** - Connections from your QTH to each contact
-- **Theme-Aware Tiles** - Matches dark/light mode automatically
+- **Fully Offline Outline Map** - Country and US/Canada state outlines bundled with the app; no tile server, API key, or internet needed
+- **Worked Areas Shaded** - States, provinces, and DX countries fill in as you work them, darker for more contacts
+- **Hover Details** - Name and contact count for any state or country
+- **Theme-Aware** - Matches dark/light mode automatically
 
 ### 🎊 Engagement Features
 - **Milestone Celebrations** - Animations at 100, 500, 1000+ contacts
@@ -93,7 +93,7 @@ Fully compliant with ARRL Field Day rules:
 
 ### World Map - Visualize Your Reach
 ![Interactive Map](screenshots/Map.png)
-*Leaflet.js powered map shows all countries and states worked. Lines connect your QTH to each contact. Click markers for location names.*
+*Offline outline map shades every state, province, and country worked, darker for more contacts. Hover for names and counts.*
 
 ---
 
@@ -330,7 +330,8 @@ Set `weather_enabled: false` in config.json if no internet
 ### Map Not Loading
 - ✅ Run `python download_leaflet.py` once
 - ✅ Check `/www/lib/` directory exists
-- ✅ Internet needed on first load (tiles are cached after)
+- ✅ Check `/www/lib/geo/` has `countries.geojson` and `states.geojson` (regenerate with `python build_map_data.py`)
+- ✅ A country that never shades is logged in the browser console; add it to `COUNTRY_ALIASES` in `www/index.html`
 
 ### Timeline Chart Empty
 - ✅ Make sure QSOs have timestamps
@@ -364,7 +365,7 @@ Set `weather_enabled: false` in config.json if no internet
 - **Frontend**: Vanilla JavaScript, Chart.js, Leaflet.js
 - **API**: N3FJP TCP/IP Interface
 - **Styling**: Custom CSS with dark/light themes
-- **Maps**: Leaflet.js with CartoDB tiles
+- **Maps**: Leaflet.js with bundled Natural Earth outlines (public domain)
 - **Weather**: wttr.in (free, no API key)
 
 ---
@@ -383,7 +384,7 @@ Set `weather_enabled: false` in config.json if no internet
 
 ### Network
 - Local network connecting N3FJP PC and scoreboard
-- Internet connection optional (for weather, map tiles on first load)
+- Internet connection optional (for weather only)
 
 ---
 
@@ -414,6 +415,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [FastAPI](https://fastapi.tiangolo.com/) - Python web framework
 - [Chart.js](https://www.chartjs.org/) - Beautiful charts
 - [Leaflet.js](https://leafletjs.com/) - Interactive maps
+- [Natural Earth](https://www.naturalearthdata.com/) - Public domain map outlines
 - [wttr.in](https://wttr.in/) - Weather data
 
 **Special thanks to**:

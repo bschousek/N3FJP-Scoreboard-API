@@ -163,10 +163,10 @@ Complete implementation of ARRL Field Day bonus scoring!
 - Recent QSOs per station
 
 ### Page 4: World Map
-- Leaflet.js interactive map
-- Countries & states worked
-- Lines from home to contacts
-- Theme-aware (dark/light tiles)
+- Offline outline map (Leaflet.js + bundled Natural Earth outlines, no API key)
+- Worked US states, Canadian provinces, and DX countries shaded by contact count
+- Hover for name and contact count
+- Theme-aware (dark/light)
 
 ---
 
@@ -296,7 +296,7 @@ Edit `setInterval(nextPage, 15000)` in index.html
 ### Map not loading
 - Run `python download_leaflet.py`
 - Check `/www/lib/` directory exists
-- Verify internet on first load (for tiles)
+- Check `www/lib/geo/` contains the outline files (regenerate with `python build_map_data.py`)
 
 ---
 
@@ -304,7 +304,7 @@ Edit `setInterval(nextPage, 15000)` in index.html
 
 Created by: **KC9MNE**  
 N3FJP Integration: Real-time API polling  
-Maps: Leaflet.js  
+Maps: Leaflet.js + Natural Earth outlines  
 Charts: Chart.js  
 Weather: wttr.in  
 
