@@ -160,6 +160,51 @@ def parse_cmd_records(text: str) -> List[Dict[str, str]]:
     return records
 
 
+_DATE_FORMATS = [
+    (re.compile(r"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$"), "ymd"),   # 2026/10/27 (N3FJP), 2026-10-27
+    (re.compile(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$"), "mdy"),   # 10/27/2026
+    (re.compile(r"^(\d{4})(\d{2})(\d{2})$"), "ymd"),                # 20261027 (ADIF)
+    (re.compile(r"^(\d{1,2})/(\d{1,2})$"), "md"),                    # 10/27 (no year)
+]
+_TIME_RE = re.compile(r"^(\d{1,2}):?(\d{2})(?::?(\d{2}))?$")      # 03:11:30, 03:11, 0311, 031130
+
+
+def parse_qso_datetime(date_str: str, time_str: str) -> Optional[datetime]:
+    """
+    Parse an N3FJP QSO date + time-on into a naive datetime, or None if unreadable.
+    N3FJP sends DATE as "YYYY/MM/DD" and TIMEON as "HH:MM:SS" (sometimes "HH:MM").
+    A combined "MM/DD HH:MM" in the date field is also accepted. Dates without a
+    year use the current UTC year.
+    """
+    d = (date_str or "").strip()
+    t = (time_str or "").strip()
+    if " " in d and not t:            # "10/27 21:59" style, all in the date field
+        d, t = d.split(None, 1)
+    d = d.split()[0] if d else d
+
+    ymd = None
+    for rx, order in _DATE_FORMATS:
+        m = rx.match(d)
+        if not m:
+            continue
+        g = [int(x) for x in m.groups()]
+        if order == "ymd":
+            ymd = (g[0], g[1], g[2])
+        elif order == "mdy":
+            ymd = (g[2], g[0], g[1])
+        else:
+            ymd = (datetime.now(timezone.utc).year, g[0], g[1])
+        break
+
+    tm = _TIME_RE.match(t)
+    if ymd is None or tm is None:
+        return None
+    try:
+        return datetime(ymd[0], ymd[1], ymd[2], int(tm.group(1)), int(tm.group(2)), int(tm.group(3) or 0))
+    except ValueError:                # e.g. month 13, hour 25
+        return None
+
+
 def points_from_modetest(modetest: str) -> int:
     mt = (modetest or "").upper()
     if mt == "PH":
@@ -208,6 +253,7 @@ class Aggregates:
     qsos_by_hour: Dict[str, int] = field(default_factory=dict)  # "2026-01-27-14" -> count
     qsos_by_band_hour: Dict[str, Dict[str, int]] = field(default_factory=dict)  # band -> {"hour" -> count}
     all_qso_times: List[str] = field(default_factory=list)  # All timestamps for analysis
+    unparsed_timestamps: int = 0  # warnings printed for unreadable dates (capped)
 
     def add_record(self, r: Dict[str, str]) -> None:
         pk_raw = r.get("FLDPRIMARYKEY") or r.get("PRIMARYKEY")
@@ -258,70 +304,22 @@ class Aggregates:
             self.sections_worked.add(section)
         
         # Track timestamps for rate calculations
-        # N3FJP uses "DATE" not "QSODATE" - critical fix!
         qso_date = (r.get("DATE") or r.get("QSODATE") or r.get("FLDQSODATE") or "").strip()
         qso_time = (r.get("TIMEON") or r.get("FLDTIMEON") or "").strip()
-        
-        # Debug: Log first few timestamps
-        if len(self.all_qso_times) < 3:
-            import sys
-            print(f"DEBUG: Parsing timestamp - DATE='{qso_date}' TIMEON='{qso_time}'", file=sys.stderr)
-        
-        if qso_date and qso_time:
-            # Parse datetime for hourly tracking
-            # N3FJP formats: "01/26 21:59" or "01/26" + "21:59" or "20260126" + "2159"
-            try:
-                month, day, hour = None, None, None
-                
-                # Try MM/DD format
-                if "/" in qso_date:
-                    parts = qso_date.split("/")
-                    if len(parts) >= 2:
-                        month = parts[0].zfill(2)
-                        day = parts[1].split()[0].zfill(2)  # Handle "01/26 21:59" format
-                
-                # Try YYYYMMDD format
-                elif len(qso_date) == 8 and qso_date.isdigit():
-                    month = qso_date[4:6]
-                    day = qso_date[6:8]
-                
-                # Parse time
-                if qso_time:
-                    # Handle "21:59:59" or "21:59" or "2159" formats
-                    time_clean = qso_time.replace(":", "").strip()
-                    if len(time_clean) >= 2:
-                        hour = time_clean[:2]
-                
-                if month and day and hour:
-                    hour_key = f"2026-{month}-{day}-{hour}"
-                    
-                    # Debug: Log successful parse
-                    if len(self.all_qso_times) < 3:
-                        import sys
-                        print(f"DEBUG: Successfully parsed -> hour_key='{hour_key}'", file=sys.stderr)
-                    
-                    # Track overall hourly QSOs
-                    self.qsos_by_hour[hour_key] = self.qsos_by_hour.get(hour_key, 0) + 1
-                    
-                    # Track band hourly QSOs
-                    if band:
-                        if band not in self.qsos_by_band_hour:
-                            self.qsos_by_band_hour[band] = {}
-                        self.qsos_by_band_hour[band][hour_key] = self.qsos_by_band_hour[band].get(hour_key, 0) + 1
-                    
-                    # Store full timestamp
-                    self.all_qso_times.append(f"{qso_date} {qso_time}")
-                else:
-                    # Debug: Log parse failure
-                    if len(self.all_qso_times) < 3:
-                        import sys
-                        print(f"DEBUG: Parse failed - month={month} day={day} hour={hour}", file=sys.stderr)
-            except Exception as e:
-                # Debug: log parsing failures
-                import sys
-                print(f"DEBUG: Timestamp parse exception: {qso_date} {qso_time} - {e}", file=sys.stderr)
-                pass
-        
+
+        qso_dt = parse_qso_datetime(qso_date, qso_time)
+        if qso_dt is not None:
+            # Hour bucket "YYYY-MM-DD-HH" (format the frontend splits on "-")
+            hour_key = qso_dt.strftime("%Y-%m-%d-%H")
+            self.qsos_by_hour[hour_key] = self.qsos_by_hour.get(hour_key, 0) + 1
+            if band:
+                band_hours = self.qsos_by_band_hour.setdefault(band, {})
+                band_hours[hour_key] = band_hours.get(hour_key, 0) + 1
+            self.all_qso_times.append(f"{qso_date} {qso_time}")
+        elif (qso_date or qso_time) and self.unparsed_timestamps < 5:
+            self.unparsed_timestamps += 1
+            print(f"WARNING: could not parse QSO date/time DATE={qso_date!r} TIMEON={qso_time!r}")
+
         # Track physical stations
         # Priority: 1) STATION field from N3FJP, 2) Operator callsign as fallback
         station = (r.get("STATION") or r.get("FLDSTATION") or "").strip()
