@@ -1320,6 +1320,13 @@ const COUNTRY_ALIASES = {
   'us virgin islands': 'VIR', 'virgin islands': 'VIR',
   'saint helena': 'SHN', 'ascension island': 'SHN', 'tristan da cunha': 'SHN',
   'sint maarten': 'SXM', 'saint maarten': 'SXM',
+  // DXCC entities seen in real logs
+  'cape verde': 'CPV', 'saint vincent': 'VCT', 'aves island': 'VEN',
+  'central kiribati': 'KIR', 'western kiribati': 'KIR', 'eastern kiribati': 'KIR',
+  'mariana islands': 'MNP', 'north cook islands': 'COK', 'south cook islands': 'COK',
+  'pitcairn island': 'PCN', 'norfolk island': 'NFK',
+  'french guiana': 'FRA', 'guadeloupe': 'FRA', 'martinique': 'FRA', 'reunion island': 'FRA',
+  'san andres and providencia': 'COL', 'south shetland islands': 'ATA',
 };
 
 // Alternate province/state abbreviations seen in logs
@@ -1335,6 +1342,7 @@ function normalizePlaceName(s) {
     .replace(/\bst\b/g, 'saint')
     .replace(/\brep\b/g, 'republic')
     .replace(/\bis$/, 'islands')
+    .replace(/\bi$/, 'island')
     .replace(/^the /, '')
     .trim();
 }

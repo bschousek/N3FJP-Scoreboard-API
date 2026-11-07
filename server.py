@@ -45,6 +45,29 @@ def load_config() -> dict:
 # N3FJP TCP API helpers
 # ----------------------------
 
+# READ-ONLY POLICY: this dashboard must never modify the N3FJP log.
+# Only commands named here may be sent; anything else is refused before a
+# connection is opened. Add a command only after confirming in the N3FJP API
+# docs that it cannot change the log, the entry form, or rig state
+# (e.g. ACTION, UPDATE, CHANGEFREQ, CHANGEMODE must never be added).
+READ_ONLY_COMMANDS = frozenset({"LIST"})
+
+_CMD_RE = re.compile(r"^<CMD><([A-Z0-9_]+)>.*</CMD>$", flags=re.IGNORECASE | re.DOTALL)
+
+
+class N3FJPWriteRefused(ValueError):
+    """Raised when code tries to send a non-read-only command to N3FJP."""
+
+
+def assert_read_only(cmd: str) -> None:
+    c = (cmd or "").strip()
+    m = _CMD_RE.match(c)
+    if not m or c.upper().count("<CMD>") != 1:
+        raise N3FJPWriteRefused(f"Refusing malformed or multi-command N3FJP request: {c[:80]!r}")
+    if m.group(1).upper() not in READ_ONLY_COMMANDS:
+        raise N3FJPWriteRefused(f"Refusing non-read-only N3FJP command {m.group(1)!r}")
+
+
 def n3fjp_cmd(
     host: str,
     port: int,
@@ -57,7 +80,10 @@ def n3fjp_cmd(
       - total_timeout expires, OR
       - no data arrives for idle_timeout (after receiving at least 1 chunk)
     Returns raw bytes.
+
+    Only read-only commands (READ_ONLY_COMMANDS) are allowed; see assert_read_only.
     """
+    assert_read_only(cmd)
     payload = (cmd.strip() + "\r\n").encode("utf-8", errors="ignore")
 
     chunks: List[bytes] = []
